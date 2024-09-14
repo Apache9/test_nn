@@ -21,10 +21,14 @@ public class Layer {
 
   private final double[] output;
 
+  private final double[] activation;
+
+  private final double[] gradient;
+
   private void fillWeights() {
     // random fill initial weights
-    for (int i = 0; i < inputDim; i++) {
-      for (int j = 0; j < outputDim; j++) {
+    for (int i = 0; i < outputDim; i++) {
+      for (int j = 0; j < inputDim; j++) {
         weights[i][j] = ThreadLocalRandom.current().nextDouble();
       }
     }
@@ -35,8 +39,10 @@ public class Layer {
     this.inputDim = inputDim;
     this.outputDim = outputDim;
     this.activationFunc = activationFunc;
-    this.weights = new double[inputDim][outputDim];
+    this.weights = new double[outputDim][inputDim];
     this.output = new double[outputDim];
+    this.activation = new double[outputDim];
+    this.gradient = new double[outputDim];
     fillWeights();
   }
 
@@ -46,18 +52,20 @@ public class Layer {
     this.inputDim = prev.outputDim;
     this.outputDim = outputDim;
     this.activationFunc = activationFunc;
-    this.weights = new double[inputDim][outputDim];
+    this.weights = new double[outputDim][inputDim];
     this.output = new double[outputDim];
+    this.activation = new double[outputDim];
+    this.gradient = new double[outputDim];
     fillWeights();
   }
 
   private void forward(double[] input) {
     for (int i = 0; i < outputDim; i++) {
-      double v = 0;
+      output[i] = 0;
       for (int j = 0; j < inputDim; j++) {
-        v += weights[j][i] * input[j];
+        output[i] += weights[i][j] * input[j];
       }
-      output[i] = activationFunc.compute(v);
+      activation[i] = activationFunc.compute(output[i]);
     }
   }
 
@@ -65,25 +73,33 @@ public class Layer {
     forward(prev != null ? prev.output : input);
   }
 
-  public void backpropagate(double eta, double[] lossGradient) {
+  private void computeGradient(double[] lossGradient) {
     if (next != null) {
-
+      for (int i = 0; i < outputDim; i++) {
+        gradient[i] = 0;
+        for (int j = 0; j < next.outputDim; j++) {
+          gradient[i] += next.gradient[j] * next.weights[j][i] * activationFunc.compute(output[i]);
+        }
+      }
     } else {
       assert lossGradient.length == outputDim;
       for (int i = 0; i < lossGradient.length; i++) {
-        lossGradient[i] *= activationFunc.differentiate(output[i]);
-      }
-      // compute gradient vector
-      for (int j = 0; j < outputDim; j++) {
-
-      }
-      // update weight
-      for (int i = 0; i < inputDim; i++) {
-        for (int j = 0; j < outputDim; j++) {
-          
-        }
+        gradient[i] = lossGradient[i] * activationFunc.differentiate(output[i]);
       }
     }
+  }
+
+  private void updateWeights(double eta, double[] input) {
+    for (int i = 0; i < outputDim; i++) {
+      for (int j = 0; j < inputDim; j++) {
+        weights[i][j] -= eta * gradient[i] * input[j];
+      }
+    }
+  }
+
+  public void backpropagate(double eta, double[] lossGradient) {
+    computeGradient(lossGradient);
+    updateWeights(eta, prev != null ? prev.output : input);
   }
 
   public void setInput(double[] input) {
@@ -98,8 +114,12 @@ public class Layer {
     return outputDim;
   }
 
-  public double[] getOutput() {
-    return output;
+  public double[] getActivation() {
+    return activation;
+  }
+
+  public Layer getPrev() {
+    return prev;
   }
 
   public Layer getNext() {
@@ -116,11 +136,12 @@ public class Layer {
       print(input);
       System.out.println("=========================");
     }
-    for (int i = 0; i < inputDim; i++) {
+    for (int i = 0; i < outputDim; i++) {
       print(weights[i]);
     }
     System.out.println("=========================");
     print(output);
+    print(activation);
     System.out.println("=========================");
   }
 }
